@@ -59,7 +59,8 @@ class PokemonListViewModelIntegrationTest {
         vm.onEvent(PokemonListEvent.AddFavourite(1, "bulbasaur"))
         advanceUntilIdle()
 
-        assertTrue(favouriteRepository.isFavourite(1))
+        val ids = db.favouriteDao().getFavouriteIds().first()
+        assertTrue("Pokemon 1 should be in favourites", ids.contains(1))
     }
 
     @Test
@@ -69,12 +70,14 @@ class PokemonListViewModelIntegrationTest {
 
         vm.onEvent(PokemonListEvent.AddFavourite(1, "bulbasaur"))
         advanceUntilIdle()
-        assertTrue(favouriteRepository.isFavourite(1))
+        val idsAfterAdd = db.favouriteDao().getFavouriteIds().first()
+        assertTrue("Should contain 1 after add", idsAfterAdd.contains(1))
 
         vm.onEvent(PokemonListEvent.RemoveFavourite(1))
         advanceUntilIdle()
 
-        assertFalse(favouriteRepository.isFavourite(1))
+        val idsAfterRemove = db.favouriteDao().getFavouriteIds().first()
+        assertFalse("Should not contain 1 after remove", idsAfterRemove.contains(1))
     }
 
     @Test
@@ -87,7 +90,6 @@ class PokemonListViewModelIntegrationTest {
         vm.onEvent(PokemonListEvent.AddFavourite(1, "bulbasaur"))
         advanceUntilIdle()
 
-        assertTrue(favouriteRepository.isFavourite(1))
         val ids = db.favouriteDao().getFavouriteIds().first()
         assertEquals(1, ids.size)
     }

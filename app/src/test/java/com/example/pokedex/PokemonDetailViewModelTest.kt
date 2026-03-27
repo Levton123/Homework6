@@ -9,6 +9,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -21,10 +22,11 @@ class PokemonDetailViewModelTest {
 
     private fun createViewModel(
         pokemonId: Int = 1,
-        repo: FakePokemonRepository = FakePokemonRepository()
+        repo: FakePokemonRepository = FakePokemonRepository(),
+        favouriteRepo: FakeFavouriteRepository = FakeFavouriteRepository()
     ): PokemonDetailViewModel {
         val savedStateHandle = SavedStateHandle(mapOf("pokemonId" to pokemonId))
-        return PokemonDetailViewModel(repo, savedStateHandle, mainDispatcherRule.testDispatcher)
+        return PokemonDetailViewModel(repo, favouriteRepo, savedStateHandle, mainDispatcherRule.testDispatcher)
     }
 
     @Test
@@ -115,5 +117,58 @@ class PokemonDetailViewModelTest {
         val success = emissions.last() as PokemonDetailUiState.Success
         assertEquals(42, success.pokemon.id)
         assertEquals("mewtwo", success.pokemon.name)
+    }
+
+    @Test
+    fun `isFavourite reflects Room state reactively`() = runTest {
+        val detail = FakePokemonRepository.defaultPokemonDetail(id = 1, name = "bulbasaur")
+        val repo = FakePokemonRepository().apply { pokemonDetailResult = Result.success(detail) }
+        val favouriteRepo = FakeFavouriteRepository()
+        val vm = createViewModel(repo = repo, favouriteRepo = favouriteRepo)
+
+        vm.uiState.test {
+            awaitItem()
+            advanceUntilIdle()
+            val afterLoad = awaitItem() as PokemonDetailUiState.Success
+            assertFalse("Initially not favourite", afterLoad.isFavourite)
+
+            favouriteRepo.addFavourite(1, "bulbasaur")
+            val afterAdd = awaitItem() as PokemonDetailUiState.Success
+            assertTrue("Should be favourite after add", afterAdd.isFavourite)
+
+            favouriteRepo.removeFavourite(1)
+            val afterRemove = awaitItem() as PokemonDetailUiState.Success
+            assertFalse("Should not be favourite after remove", afterRemove.isFavourite)
+
+            cancelAndIgnoreRemainingEvents()
+        }
+    }
+
+    @Test
+    fun `toggleFavourite adds when not favourite`() = runTest {
+        val detail = FakePokemonRepository.defaultPokemonDetail(id = 1, name = "bulbasaur")
+        val repo = FakePokemonRepository().apply { pokemonDetailResult = Result.success(detail) }
+        val favouriteRepo = FakeFavouriteRepository()
+        val vm = createViewModel(repo = repo, favouriteRepo = favouriteRepo)
+
+        advanceUntilIdle()
+        vm.onEvent(PokemonDetailEvent.ToggleFavourite("bulbasaur"))
+        advanceUntilIdle()
+
+        assertTrue(favouriteRepo.addedFavourites.contains(1 to "bulbasaur"))
+    }
+
+    @Test
+    fun `toggleFavourite removes when already favourite`() = runTest {
+        val detail = FakePokemonRepository.defaultPokemonDetail(id = 1, name = "bulbasaur")
+        val repo = FakePokemonRepository().apply { pokemonDetailResult = Result.success(detail) }
+        val favouriteRepo = FakeFavouriteRepository().apply { setFavourites(listOf(1)) }
+        val vm = createViewModel(repo = repo, favouriteRepo = favouriteRepo)
+
+        advanceUntilIdle()
+        vm.onEvent(PokemonDetailEvent.ToggleFavourite("bulbasaur"))
+        advanceUntilIdle()
+
+        assertTrue(favouriteRepo.removedFavourites.contains(1))
     }
 }

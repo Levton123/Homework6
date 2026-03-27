@@ -16,6 +16,9 @@ sealed interface PokemonListUiState {
 
 sealed interface PokemonDetailUiState {
     data object Loading : PokemonDetailUiState
-    data class Success(val pokemon: PokemonDetail) : PokemonDetailUiState
+    data class Success(
+        val pokemon: PokemonDetail,
+        val isFavourite: Boolean = false
+    ) : PokemonDetailUiState
     data class Error(val message: String) : PokemonDetailUiState
 }
