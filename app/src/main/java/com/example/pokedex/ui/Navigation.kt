@@ -42,26 +42,13 @@ fun PokemonNavigation(
         composable(
             route = Screen.PokemonDetail.route,
             arguments = listOf(navArgument("pokemonId") { type = NavType.IntType })
-        ) { backStackEntry ->
-            val pokemonId = backStackEntry.arguments?.getInt("pokemonId") ?: return@composable
+        ) {
             val detailViewModel: PokemonDetailViewModel = hiltViewModel()
             val detailUiState by detailViewModel.uiState.collectAsState()
-            val favourites by sharedListViewModel.favourites.collectAsState()
-            val isFavourite = favourites.contains(pokemonId)
-            val pokemonName = (detailUiState as? PokemonDetailUiState.Success)?.pokemon?.name ?: ""
 
             PokemonDetailScreen(
                 uiState = detailUiState,
-                isFavourite = isFavourite,
-                onEvent = { event ->
-                    when (event) {
-                        is PokemonDetailEvent.ToggleFavourite -> {
-                            if (isFavourite) sharedListViewModel.onEvent(PokemonListEvent.RemoveFavourite(pokemonId))
-                            else sharedListViewModel.onEvent(PokemonListEvent.AddFavourite(pokemonId, pokemonName))
-                        }
-                        else -> detailViewModel.onEvent(event)
-                    }
-                },
+                onEvent = detailViewModel::onEvent,
                 onBackClick = { navController.navigateUp() }
             )
         }

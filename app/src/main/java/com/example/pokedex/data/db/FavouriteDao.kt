@@ -12,7 +12,7 @@ interface FavouriteDao {
     @Query("SELECT pokemonId FROM favourites ORDER BY addedAt DESC")
     fun getFavouriteIds(): Flow<List<Int>>
 
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun addFavourite(favourite: FavouriteEntity)
 
     @Query("DELETE FROM favourites WHERE pokemonId = :pokemonId")

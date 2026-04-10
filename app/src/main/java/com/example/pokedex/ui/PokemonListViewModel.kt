@@ -5,89 +5,121 @@ import androidx.lifecycle.viewModelScope
 import com.example.pokedex.data.repository.FavouriteRepository
 import com.example.pokedex.data.repository.PokemonRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
+@OptIn(FlowPreview::class, ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class PokemonListViewModel @Inject constructor(
     private val pokemonRepository: PokemonRepository,
-    private val favouriteRepository: FavouriteRepository
+    private val favouriteRepository: FavouriteRepository,
+    private val dispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
-    private val _listState = MutableStateFlow<PokemonListUiState>(PokemonListUiState.Loading)
+    private val _searchQuery = MutableStateFlow("")
+
+    private val _refreshTrigger = MutableStateFlow(0)
+
+    private val debouncedQuery = _searchQuery
+        .debounce(300)
+        .distinctUntilChanged()
+
+    private val pokemonListFlow = combine(debouncedQuery, _refreshTrigger) { query, _ -> query }
+        .flatMapLatest { query ->
+            flow {
+                emit(PokemonListLoadState.Loading)
+                val result = withContext(dispatcher) {
+                    if (query.isBlank()) {
+                        pokemonRepository.getPokemonList()
+                    } else {
+                        pokemonRepository.searchPokemon(query)
+                    }
+                }
+                result.fold(
+                    onSuccess = { list ->
+                        if (list.isEmpty()) emit(PokemonListLoadState.Empty)
+                        else emit(PokemonListLoadState.Success(list, query))
+                    },
+                    onFailure = { error ->
+                        emit(PokemonListLoadState.Failure(error.message ?: "Unknown error"))
+                    }
+                )
+            }
+        }
+
+    private val favouritesFlow = favouriteRepository.favouriteIds
+        .onStart { emit(emptyList()) }
+        .map { it.toSet() }
 
     val favourites: StateFlow<Set<Int>> = favouriteRepository.favouriteIds
         .map { it.toSet() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
-    val uiState: StateFlow<PokemonListUiState> = combine(_listState, favourites) { listState, favs ->
+    val uiState: StateFlow<PokemonListUiState> = combine(
+        pokemonListFlow,
+        favouritesFlow
+    ) { listState, favs ->
         when (listState) {
-            is PokemonListUiState.Success -> listState.copy(favourites = favs)
-            else -> listState
+            is PokemonListLoadState.Loading -> PokemonListUiState.Loading
+            is PokemonListLoadState.Empty -> PokemonListUiState.Empty
+            is PokemonListLoadState.Failure -> PokemonListUiState.Error(listState.message)
+            is PokemonListLoadState.Success -> PokemonListUiState.Success(
+                pokemonList = listState.list,
+                searchQuery = listState.query,
+                favourites = favs
+            )
         }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, PokemonListUiState.Loading)
 
-    private var searchJob: Job? = null
-
-    init {
-        loadPokemonList()
-    }
-
     fun onEvent(event: PokemonListEvent) {
         when (event) {
-            is PokemonListEvent.Search -> performSearch(event.query)
-            is PokemonListEvent.Retry -> loadPokemonList()
-            is PokemonListEvent.Refresh -> { searchJob?.cancel(); loadPokemonList() }
+            is PokemonListEvent.Search -> _searchQuery.value = event.query
+            is PokemonListEvent.Retry -> _refreshTrigger.value++
+            is PokemonListEvent.Refresh -> {
+                _searchQuery.value = ""
+                _refreshTrigger.value++
+            }
             is PokemonListEvent.AddFavourite -> addFavourite(event.pokemonId, event.pokemonName)
             is PokemonListEvent.RemoveFavourite -> removeFavourite(event.pokemonId)
         }
     }
 
-    private fun loadPokemonList() {
-        viewModelScope.launch {
-            _listState.value = PokemonListUiState.Loading
-            pokemonRepository.getPokemonList().fold(
-                onSuccess = { list ->
-                    _listState.value = if (list.isEmpty()) PokemonListUiState.Empty
-                    else PokemonListUiState.Success(pokemonList = list)
-                },
-                onFailure = { error ->
-                    _listState.value = PokemonListUiState.Error(error.message ?: "Unknown error")
-                }
-            )
-        }
-    }
-
-    private fun performSearch(query: String) {
-        searchJob?.cancel()
-        searchJob = viewModelScope.launch {
-            delay(300)
-            pokemonRepository.searchPokemon(query).fold(
-                onSuccess = { results ->
-                    _listState.value = if (results.isEmpty()) PokemonListUiState.Empty
-                    else PokemonListUiState.Success(pokemonList = results, searchQuery = query)
-                },
-                onFailure = { error ->
-                    _listState.value = PokemonListUiState.Error(error.message ?: "Search failed")
-                }
-            )
-        }
-    }
-
     private fun addFavourite(pokemonId: Int, pokemonName: String) {
-        viewModelScope.launch { favouriteRepository.addFavourite(pokemonId, pokemonName) }
+        viewModelScope.launch {
+            withContext(dispatcher) { favouriteRepository.addFavourite(pokemonId, pokemonName) }
+        }
     }
 
     private fun removeFavourite(pokemonId: Int) {
-        viewModelScope.launch { favouriteRepository.removeFavourite(pokemonId) }
+        viewModelScope.launch {
+            withContext(dispatcher) { favouriteRepository.removeFavourite(pokemonId) }
+        }
+    }
+
+    private sealed interface PokemonListLoadState {
+        data object Loading : PokemonListLoadState
+        data object Empty : PokemonListLoadState
+        data class Success(
+            val list: List<com.example.pokedex.data.model.PokemonListItem>,
+            val query: String
+        ) : PokemonListLoadState
+        data class Failure(val message: String) : PokemonListLoadState
     }
 }
 

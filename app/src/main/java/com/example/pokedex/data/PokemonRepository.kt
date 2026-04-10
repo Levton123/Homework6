@@ -7,13 +7,13 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class PokemonRepository @Inject constructor(
+open class PokemonRepository @Inject constructor(
     private val apiService: PokemonApiService
 ) {
     private var cachedPokemonList: List<PokemonListItem>? = null
     private val cachedDetails = mutableMapOf<Int, PokemonDetail>()
 
-    suspend fun getPokemonList(limit: Int = 151, offset: Int = 0): Result<List<PokemonListItem>> {
+    open suspend fun getPokemonList(limit: Int = 151, offset: Int = 0): Result<List<PokemonListItem>> {
         return try {
             val response = apiService.getPokemonList(limit, offset)
             cachedPokemonList = response.results
@@ -25,7 +25,7 @@ class PokemonRepository @Inject constructor(
         }
     }
 
-    suspend fun getPokemonDetail(id: Int): Result<PokemonDetail> {
+    open suspend fun getPokemonDetail(id: Int): Result<PokemonDetail> {
         cachedDetails[id]?.let {
             return Result.success(it)
         }
@@ -38,7 +38,7 @@ class PokemonRepository @Inject constructor(
         }
     }
 
-    suspend fun searchPokemon(query: String): Result<List<PokemonListItem>> {
+    open suspend fun searchPokemon(query: String): Result<List<PokemonListItem>> {
         val allPokemon = cachedPokemonList ?: run {
             val result = getPokemonList()
             result.getOrNull() ?: return Result.failure(

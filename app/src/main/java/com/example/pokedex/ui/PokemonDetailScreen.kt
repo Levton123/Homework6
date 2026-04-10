@@ -21,10 +21,11 @@ import com.example.pokedex.data.model.PokemonDetail
 @Composable
 fun PokemonDetailScreen(
     uiState: PokemonDetailUiState,
-    isFavourite: Boolean,
     onEvent: (PokemonDetailEvent) -> Unit,
     onBackClick: () -> Unit
 ) {
+    val successState = uiState as? PokemonDetailUiState.Success
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -35,12 +36,14 @@ fun PokemonDetailScreen(
                     }
                 },
                 actions = {
-                    if (uiState is PokemonDetailUiState.Success) {
-                        IconButton(onClick = { onEvent(PokemonDetailEvent.ToggleFavourite) }) {
+                    if (successState != null) {
+                        IconButton(onClick = {
+                            onEvent(PokemonDetailEvent.ToggleFavourite(successState.pokemon.name))
+                        }) {
                             Icon(
-                                imageVector = if (isFavourite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                                imageVector = if (successState.isFavourite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                                 contentDescription = "Favourite",
-                                tint = if (isFavourite) MaterialTheme.colorScheme.primary
+                                tint = if (successState.isFavourite) MaterialTheme.colorScheme.primary
                                 else MaterialTheme.colorScheme.onSurface
                             )
                         }
