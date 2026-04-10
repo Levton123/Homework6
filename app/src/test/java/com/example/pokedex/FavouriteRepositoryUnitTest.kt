@@ -4,6 +4,7 @@ import app.cash.turbine.test
 import com.example.pokedex.data.db.FavouriteDao
 import com.example.pokedex.data.db.FavouriteEntity
 import com.example.pokedex.data.repository.FavouriteRepository
+import com.example.pokedex.data.repository.FavouriteRepositoryImpl
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -24,13 +25,13 @@ class FavouriteRepositoryUnitTest {
     @Before
     fun setup() {
         dao = mockk(relaxed = true)
-        repository = FavouriteRepository(dao)
+        repository = FavouriteRepositoryImpl(dao)
     }
 
     @Test
     fun `favouriteIds emits list from dao`() = runTest {
         every { dao.getFavouriteIds() } returns flowOf(listOf(1, 2, 3))
-        val repo = FavouriteRepository(dao)
+        val repo = FavouriteRepositoryImpl(dao)
 
         repo.favouriteIds.test {
             assertEquals(listOf(1, 2, 3), awaitItem())

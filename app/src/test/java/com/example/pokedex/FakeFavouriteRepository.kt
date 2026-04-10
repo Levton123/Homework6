@@ -1,11 +1,10 @@
 package com.example.pokedex
 
 import com.example.pokedex.data.repository.FavouriteRepository
-import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
-class FakeFavouriteRepository : FavouriteRepository(mockk(relaxed = true)) {
+class FakeFavouriteRepository : FavouriteRepository {
 
     private val _favouriteIds = MutableStateFlow<List<Int>>(emptyList())
     override val favouriteIds: Flow<List<Int>> = _favouriteIds

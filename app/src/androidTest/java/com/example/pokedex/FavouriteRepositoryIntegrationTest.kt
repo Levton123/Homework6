@@ -7,6 +7,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import app.cash.turbine.test
 import com.example.pokedex.data.db.PokedexDatabase
 import com.example.pokedex.data.repository.FavouriteRepository
+import com.example.pokedex.data.repository.FavouriteRepositoryImpl
 import kotlinx.coroutines.test.runTest
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -28,7 +29,7 @@ class FavouriteRepositoryIntegrationTest {
         db = Room.inMemoryDatabaseBuilder(context, PokedexDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        repository = FavouriteRepository(db.favouriteDao())
+        repository = FavouriteRepositoryImpl(db.favouriteDao())
     }
 
     @After
